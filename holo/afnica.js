@@ -516,3 +516,30 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
   setInterval(() => { if (!tried) start(); }, 20000);   // picks it up after "connect spotify" without reopening the app
   window.__spotifyPlayer = () => player;
 })();
+
+
+// ---- AFNICA Aquarium development card: version, changes, commits and backlog, all read locally ----
+(() => {
+  const token = document.querySelector('meta[name="jarvis-session"]').content, $ = id => document.getElementById(id);
+  const card = $('aqcard'), sel = $('module'); if (!card || !sel) return;
+  const put = (id, text) => { $(id).textContent = text; };
+  const ago = t => { const a = Math.max(0, Math.round(Date.now() / 1000 - t)); return a < 90 ? 'just now' : a < 5400 ? Math.round(a / 60) + ' min ago' : a < 172800 ? Math.round(a / 3600) + ' h ago' : Math.round(a / 86400) + ' days ago'; };
+  const fill = (id, rows) => { const ul = $(id); ul.textContent = ''; (rows.length ? rows : ['—']).forEach(r => { const li = document.createElement('li'); li.textContent = r; ul.append(li); }); };
+  async function refresh() {
+    const on = sel.value === 'game'; card.hidden = !on; if (!on) return;
+    try {
+      const d = await (await fetch('/api/aquarium', { headers: { 'X-Jarvis-Token': token } })).json();
+      $('aq-empty').hidden = !!d.game_found; $('aq-body').hidden = !d.game_found; if (!d.game_found) return;
+      put('aq-level', d.version || ''); put('aq-ver', d.version_name || '');
+      $('aq-xp').style.width = (d.percent || 0) + '%'; put('aq-xptext', d.percent == null ? 'Backlog empty. In this context say: task: <title>' : 'BACKLOG ' + d.percent + '% complete');
+      const git = d.git || { count: 0, recent: [] }, grid = $('aq-grid'); grid.textContent = '';
+      [['VERSIONS', d.version_count], ['COMMITS', git.count], ['LAST EDIT', ago(d.edited)], ['OPEN', d.counts.open], ['DONE', d.counts.done], ['LAST COMMIT', git.recent[0] ? ago(git.recent[0].time) : '—']].forEach(([k, v]) => {
+        const cell = document.createElement('div'), b = document.createElement('b'); b.textContent = v ?? 0; cell.append(b, k); grid.append(cell); });
+      fill('aq-log', (d.milestones || []).map(m => m.v + ' — ' + m.text));
+      fill('aq-git', git.recent.map(c => ago(c.time) + ' — ' + c.text));
+      fill('aq-todo', d.tasks_open.map(t => '#' + t.id + ' ' + t.title));
+      put('aq-age', 'Read locally from the game folder · refreshes every 10 s');
+    } catch (_) {}
+  }
+  sel.addEventListener('change', refresh); refresh(); setInterval(refresh, 10000);
+})();

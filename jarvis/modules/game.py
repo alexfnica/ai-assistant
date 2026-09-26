@@ -1,4 +1,5 @@
 from .base import Module
 
-MODULE = Module("game", "AFNICA Game", "Backlog, note de build și verificări manuale. Nu citește automat proiectul.",
-                "task: Testează salvarea progresului")
+MODULE = Module("game", "AFNICA Aquarium",
+                "AFNICA Aquarium: the fishroom simulator. Say \"open\" here to launch the game, and keep its backlog, build notes and manual checks.",
+                "task: Test saving fish progress in the aquarium game")

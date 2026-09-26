@@ -132,6 +132,8 @@ class SpotifyTests(Base):
         core.integrations.aquarium_path = "C:/games/aquarium.html"
         self.assertIn("Opening the aquarium", core.handle("open the aquarium").text)
         self.assertEqual(opened, ["C:/games/aquarium.html"])
+        self.assertIn("Opening the aquarium", core.handle("/game open").text)
+        self.assertEqual(len(opened), 2)
 
     def test_open_known_sites_and_apps_by_voice(self):
         urls, apps = [], []
@@ -246,3 +248,51 @@ class YouTubeTests(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AquariumProgressTests(unittest.TestCase):
+    def make_project(self, tmp):
+        from pathlib import Path
+        game = Path(tmp) / "AFNICA_Aquarium_V17_40_Bristlenose_Breeding.html"
+        game.write_text("<style>/* ===== V17.11 PREMIUM SUBSTRATE ASSETS ===== */ /* ================= V9 VERTICAL SLICE ================= */"
+                        "/* V17.13: one saved clock survives renders. */</style>", encoding="utf-8")
+        logs = Path(tmp) / ".git" / "logs"
+        logs.mkdir(parents=True)
+        (logs / "HEAD").write_text("0 abc Alex <a@b.c> 1790373221 +0300\tcommit (initial): First\n"
+                                   "abc def Alex <a@b.c> 1790374817 +0300\tcommit: Fix motion loop\n", encoding="utf-8")
+        return game
+
+    def test_collects_versions_commits_and_backlog(self):
+        import tempfile
+        from pathlib import Path
+        from jarvis import aquarium
+        from jarvis.storage import Store
+        with tempfile.TemporaryDirectory() as tmp:
+            game = self.make_project(tmp)
+            store = Store(Path(tmp) / "j.sqlite3")
+            done = store.add_task("game", "Ship breeding")
+            store.add_task("game", "Balance prices")
+            store.complete(done)
+            data = aquarium.collect(str(game), store)
+            self.assertEqual((data["version"], data["version_name"]), ("V17.40", "Bristlenose Breeding"))
+            self.assertEqual([m["v"] for m in data["milestones"]], ["V17.40", "V17.13", "V17.11", "V9"])
+            self.assertEqual(data["milestones"][2]["text"], "Premium Substrate Assets")
+            self.assertEqual(data["git"]["count"], 2)
+            self.assertEqual(data["git"]["recent"][0]["text"], "Fix motion loop")
+            self.assertNotIn("@", str(data))                     # no author e-mail leaks out
+            self.assertEqual((data["percent"], data["counts"]), (50, {"open": 1, "done": 1}))
+
+    def test_status_command_and_missing_game(self):
+        import tempfile
+        from pathlib import Path
+        from jarvis.core import Core
+        from jarvis.storage import Store
+        with tempfile.TemporaryDirectory() as tmp:
+            game = self.make_project(tmp)
+            core = Core(Store(Path(tmp) / "j.sqlite3"))
+            self.assertIn("not linked", core.handle("aquarium status").text)
+            core.integrations.aquarium_path = str(game)
+            text = core.handle("how is my aquarium doing").text
+            self.assertIn("V17.40 Bristlenose Breeding", text)
+            self.assertIn("2 commits", text)
+            self.assertIn("backlog is empty", core.handle("/game progress").text)

@@ -130,6 +130,9 @@ class HoloHandler(BaseHTTPRequestHandler):
                     if spotify is None or not spotify.connected:
                         return self.send(404, {"error": "Spotify is not connected."})
                     return self.send(200, {"token": spotify.access_token()})
+                if route == "/api/aquarium":
+                    from . import aquarium
+                    return self.send(200, aquarium.collect(getattr(self.server.core.integrations, "aquarium_path", ""), self.server.store))
                 if route == "/api/tree":
                     return self.send(200, tree_data(self.server.store))
                 if route == "/api/status":

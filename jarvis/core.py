@@ -152,6 +152,11 @@ class Core:
             return build_briefing(self.store, getattr(self.integrations, "docs", None))
         if command in ("documente", "documents", "docs"):
             return self._docs().list_documents()
+        if re.fullmatch(r"(?:please\s+)?(?:(?:show|give|tell)(?:\s+me)?\s+)?(?:the\s+|my\s+)?(?:aquarium|fishroom|fish room)(?:\s+game)?\s+(?:status|progress|report|update|version)|(?:how(?:'s| is)|what(?:'s| is)) (?:the |my )?(?:aquarium|fishroom|game)(?: game)?(?: doing| progress| status)?|aquarium (?:status|progress)", command, flags=re.I) or (module == "game" and re.fullmatch(r"(?:progress|report|version|what'?s new|latest version)[.!?]*", command, flags=re.I)):
+            from . import aquarium
+            return aquarium.summary_text(aquarium.collect(getattr(self.integrations, "aquarium_path", ""), self.store))
+        if module == "game" and re.fullmatch(r"(?:please\s+)?(?:open|launch|start|play|run)(?:\s+(?:the\s+)?(?:game|aquarium|simulator|it))?[.!?]*", command, flags=re.I):
+            return self._open_site_command("open aquarium", module)      # in the aquarium module a bare "open" launches the game
         for early in (self._open_site_command, self._music_command):      # "open WhatsApp / Spotify / YouTube ..." must win over "open <document>"
             answer = early(command, module)
             if answer is not None:
