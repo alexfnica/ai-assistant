@@ -10,7 +10,7 @@ It listens, answers in a natural British voice generated on the device, controls
 and YouTube, reads business documents, and keeps notes, tasks and reminders. Built in
 pure Python standard library (no runtime dependencies) and about 500 lines of vanilla JS.
 
-<!-- Add a screenshot or a short GIF here: docs/img/hud.png -->
+![A.I Assistant HUD](docs/img/hud.png)
 
 ## Why it is built this way
 
