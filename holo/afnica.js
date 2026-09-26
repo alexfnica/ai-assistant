@@ -28,6 +28,7 @@
       const data = await api('/api/status');
       $('counts').textContent = `${data.tasks} task-uri deschise · ${data.notes} note salvate · AI: ${data.model || 'Command-only'}`;
       $('due-banner').textContent = data.due.length ? `${data.due.length} scadente · ${data.due[0].title}` : '';
+      if (data.alerts && data.alerts.length) { notify(data.alerts.join(' ')); if (window.__jarvisSay) window.__jarvisSay(data.alerts.join(' ')); }   // fishroom routines: shown once and spoken once
       const signature = JSON.stringify(data.history);
       if (signature !== lastHistory) {
         lastHistory = signature; $('messages').replaceChildren();

@@ -74,8 +74,9 @@ class HoloServer(ThreadingHTTPServer):
         return data
 
     def status(self):
+        alerts = self.core.routines_tick()
         tasks = self.store.tasks()
-        return {"version": "1.4.0", "tasks": len(tasks), "notes": len(self.store.memories()),
+        return {"alerts": alerts, "version": "1.4.0", "tasks": len(tasks), "notes": len(self.store.memories()),
                 "model": getattr(self.core.integrations.llm, "state", "Command-only mode"),
                 "due": self.store.due(), "history": self.store.history(30),
                 "gesture": self.gesture, "integrations": "Google / YouTube / ChatGPT: neconectate"}

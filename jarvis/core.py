@@ -158,6 +158,9 @@ class Core:
         answer = self._call_command(command, module)
         if answer is not None:
             return answer
+        answer = self._routine_command(text, command)
+        if answer is not None:
+            return answer
         if self._cut:
             done = self._continue_answer(command)
             if done is not None:
@@ -269,6 +272,40 @@ class Core:
         prompt = (f"{cut['prompt']}\n\nYour previous answer was cut off by a length limit. What you had written so far:\n\"\"\"\n"
                   f"{cut['answer'][-900:]}\n\"\"\"\nContinue from exactly where it stopped. Do not repeat anything already said, and do not start over.")
         return self._ask_llm(prompt, cut["module"], earlier=cut["answer"])
+
+    def _routines(self):
+        from .routines import Routines
+        return Routines(self.store.path.parent)
+
+    def _routine_command(self, text, command):
+        """Fishroom routines: "remind me every Sunday at 10 to change water in tank A", "routines", "remove routine 2"."""
+        from .routines import ADD, describe, parse_days, parse_times
+        if re.fullmatch(r"(?:my |show |list )*routines(?: list)?", command):
+            rows = self._routines().list()
+            return "\n".join(f"#{r['id']} {r['title']} - {describe(r)}" for r in rows) or "No routines yet. Say: remind me every Sunday at 10 to change water in tank A."
+        drop = re.fullmatch(r"(?:remove|delete|stop|cancel)\s+routine\s+#?(\d+)", command)
+        if drop:
+            return "Routine removed, sir." if self._routines().remove(int(drop.group(1))) else "I do not have a routine with that number."
+        match = ADD.fullmatch(text.strip())
+        if not match:
+            return None
+        days = parse_days(match.group("when"))
+        times = parse_times(match.group("times"), match.group("when"))
+        title = match.group("title").strip()
+        title = title[:1].upper() + title[1:]
+        row = self._routines().add(title, days, times)
+        return f"Routine #{row['id']} saved: {row['title']}, {describe(row)}. I shall remind you aloud while I am running."
+
+    def routines_tick(self, now=None):
+        """Turn routines that just came due into ordinary tasks and spoken alerts. Called from the status poll."""
+        from .storage import utc_now
+        alerts = []
+        for row in self._routines().due(now):
+            task_id = self.store.add_task("fishroom", "Routine: " + row["title"], utc_now())
+            message = address(f"Routine, sir: {row['title']}. Say: done {task_id} when it is finished.")
+            self.store.message("assistant", message, "fishroom")
+            alerts.append(f"Routine, sir: {row['title']}. Say done {task_id} when it is finished.")
+        return alerts
 
     def _contacts(self):
         from .config import load_config
