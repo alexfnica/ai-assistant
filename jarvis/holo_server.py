@@ -52,6 +52,27 @@ class HoloServer(ThreadingHTTPServer):
         self.tts = KokoroService()
         self.tts.warm()  # load the natural voice in the background so replies are spoken without delay
 
+    def youtube_status(self):
+        """Channel snapshot for the card, cached for five minutes so the polling page barely touches the API quota."""
+        import time
+        from .integrations import NotConnected
+        cached = getattr(self, "_yt_cache", None)
+        if cached and time.time() - cached[0] < 300:
+            return cached[1]
+        youtube = getattr(self.core.integrations, "youtube", None)
+        try:
+            if youtube is None or not youtube.configured:
+                raise NotConnected("YouTube is not set up yet. See SETUP-YOUTUBE-SPOTIFY.md.")
+            if not youtube.connected:
+                raise NotConnected("YouTube is not connected. Say: connect youtube.")
+            data = {"connected": True, "updated": int(time.time()), **youtube.snapshot()}
+        except NotConnected as error:
+            data = {"connected": False, "message": str(error)}
+            self._yt_cache = (time.time() - 295, data)   # not connected: look again in five seconds, so the card turns on right after you approve access
+            return data
+        self._yt_cache = (time.time(), data)
+        return data
+
     def status(self):
         tasks = self.store.tasks()
         return {"version": "1.4.0", "tasks": len(tasks), "notes": len(self.store.memories()),
@@ -130,6 +151,8 @@ class HoloHandler(BaseHTTPRequestHandler):
                     if spotify is None or not spotify.connected:
                         return self.send(404, {"error": "Spotify is not connected."})
                     return self.send(200, {"token": spotify.access_token()})
+                if route == "/api/youtube":
+                    return self.send(200, self.server.youtube_status())
                 if route == "/api/aquarium":
                     from . import aquarium
                     return self.send(200, aquarium.collect(getattr(self.server.core.integrations, "aquarium_path", ""), self.server.store))

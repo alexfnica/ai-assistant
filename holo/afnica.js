@@ -249,7 +249,7 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
     const key = t.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim(), nowT = Date.now();   // the same phrase twice within a few seconds is one command
     if (key && key === handle.k && nowT - handle.t < 6000) return; handle.k = key; handle.t = nowT;
     const wake = /^(?:hey |ok |okay )?jarvis\b[\s,.:!?-]*/i;
-    const musicOk = /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|volume|turn (?:it |the volume )?(?:up|down)|louder|quieter)\b/i;
+    const musicOk = /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|yes|yeah|yep|sure|confirm|cancel|nope|no|volume|turn (?:it |the volume )?(?:up|down)|louder|quieter)\b/i;
     if (window.__musicPlaying && !needWake) {   // the mic also hears the song: take only what follows the last "Jarvis", or a music command at the very end
       const all = [...t.matchAll(/\b(?:hey |ok |okay )?jarvis\b[\s,.:!?-]*/gi)];
       const tail = t.match(/(?:^|[\s,.!?])((?:please\s+)?(?:stop(?: the)?(?: music| song)?|pause|resume|next(?: song)?|skip|louder|quieter|volume (?:up|down)|turn (?:it |the volume )?(?:up|down))[\s.!?]*)$/i);
@@ -268,7 +268,7 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
     if (all.length) { const m = all[all.length - 1], rest = x.slice(m.index + m[0].length).trim(); return rest ? 'jarvis ' + rest : null; }
     const tail = x.match(/(?:^|[\s,.!?])((?:please\s+)?(?:stop(?: the)?(?: music| song)?|pause|resume|next(?: song)?|skip|louder|quieter|volume (?:up|down)|turn (?:it |the volume )?(?:up|down))[\s.!?]*)$/i);
     if (tail) return tail[1].trim();
-    const w = words(x); return w.length <= 10 && /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|volume|louder|quieter|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste)\b/i.test(x) ? x : null;
+    const w = words(x); return w.length <= 10 && /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|volume|louder|quieter|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|yes|yeah|yep|sure|confirm|cancel|nope|no)\b/i.test(x) ? x : null;
   };
   function startRec() {
     if (!SR || muted || rec) return;
@@ -542,4 +542,31 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
     } catch (_) {}
   }
   sel.addEventListener('change', refresh); refresh(); setInterval(refresh, 10000);
+})();
+
+
+// ---- YouTube channel card (context: YouTube). The server caches the API answer for five minutes. ----
+(() => {
+  const token = document.querySelector('meta[name="jarvis-session"]').content, $ = id => document.getElementById(id);
+  const card = $('ytcard'), sel = $('module'); if (!card || !sel) return;
+  const put = (id, t) => { $(id).textContent = t; };
+  const n = v => Number(v || 0).toLocaleString('en-US');
+  async function refresh() {
+    const on = sel.value === 'youtube'; card.hidden = !on; if (!on) return;
+    try {
+      const d = await (await fetch('/api/youtube', { headers: { 'X-Jarvis-Token': token } })).json();
+      $('yt-empty').hidden = !!d.connected; $('yt-body').hidden = !d.connected;
+      if (!d.connected) { put('yt-empty', d.message || 'YouTube is not connected.'); return; }
+      put('yt-title', d.title); put('yt-sub', d.subs_hidden ? 'subscribers hidden' : n(d.subscribers) + ' subscribers');
+      const l = d.last28, grid = $('yt-grid'); grid.textContent = '';
+      [['SUBSCRIBERS', d.subs_hidden ? '—' : n(d.subscribers)], ['TOTAL VIEWS', n(d.views)], ['VIDEOS', n(d.videos)],
+       ['VIEWS · 28D', l ? n(l.views) : '—'], ['HOURS · 28D', l ? n(l.hours) : '—'], ['SUBS · 28D', l ? '+' + l.gained + ' / -' + l.lost : '—']].forEach(([k, v]) => {
+        const cell = document.createElement('div'), b = document.createElement('b'); b.textContent = v; cell.append(b, k); grid.append(cell); });
+      put('yt-28', l ? 'Average view ' + Math.floor(l.avg_seconds / 60) + ':' + String(l.avg_seconds % 60).padStart(2, '0') : 'Last-28-days analytics not available');
+      const ul = $('yt-videos'); ul.textContent = '';
+      (d.recent.length ? d.recent : [{ title: '—', published: '', views: 0 }]).forEach(v => { const li = document.createElement('li'); li.textContent = v.published + ' · ' + v.title + ' — ' + n(v.views) + ' views, ' + n(v.likes) + ' likes'; ul.append(li); });
+      const a = Math.max(0, Math.round(Date.now() / 1000 - d.updated)); put('yt-age', 'Updated ' + (a < 90 ? 'just now' : Math.round(a / 60) + ' min ago') + ' · refreshes every 5 min');
+    } catch (_) { put('yt-empty', 'Could not read YouTube status.'); $('yt-empty').hidden = false; }
+  }
+  sel.addEventListener('change', refresh); refresh(); setInterval(refresh, 15000);   // cheap: the server answers from its five-minute cache
 })();

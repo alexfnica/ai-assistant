@@ -220,6 +220,32 @@ class YouTubeTests(Base):
         self.assertIn("King Tiger Pleco care", text)
         self.assertIn("King Tiger", core.handle("my videos").text)
 
+    def test_snapshot_is_structured_for_the_card(self):
+        yt, core = self.make()
+        snap = yt.snapshot()
+        self.assertEqual((snap["title"], snap["subscribers"], snap["views"], snap["videos"]), ("AFNICA", 120, 5000, 9))
+        self.assertEqual(snap["recent"][0]["title"], "King Tiger Pleco care")
+        self.assertEqual(snap["last28"]["gained"], 12)
+
+    def test_videos_are_numbered_and_can_be_picked_by_number(self):
+        seen = []
+        class Model:
+            state = "ready"
+            def reply(self, text, module, *, system_prompt):
+                seen.append(text)
+                return "Feedback."
+        yt, core = self.make(llm=Model())
+        listing = core.handle("my videos").text
+        self.assertIn("1. King Tiger Pleco care", listing)
+        self.assertIn("2. Guppy tour", listing)
+        self.assertIn("Which one", core.handle("give me feedback").text)          # no name: it lists them, it does not ask for a title
+        self.assertIn("Guppy tour", core.handle("video 2").text)
+        core.handle("feedback on video 2")
+        self.assertIn("Guppy tour", seen[-1])
+        core.handle("give me feedback on the first video")
+        self.assertIn("King Tiger", seen[-1])
+        self.assertIn("only see 2 videos", core.handle("video 9").text)
+
     def test_feedback_sends_report_as_data_to_the_model_and_comments_stay_inert(self):
         seen = []
         class Model:
@@ -296,3 +322,85 @@ class AquariumProgressTests(unittest.TestCase):
             self.assertIn("V17.40 Bristlenose Breeding", text)
             self.assertIn("2 commits", text)
             self.assertIn("backlog is empty", core.handle("/game progress").text)
+
+
+class ContinueAnswerTests(unittest.TestCase):
+    def test_continue_finishes_a_cut_answer_instead_of_resuming_music_or_starting_over(self):
+        import tempfile
+        from pathlib import Path
+        from jarvis.core import Core
+        from jarvis.integrations import Integrations
+        from jarvis.storage import Store
+        prompts = []
+
+        class Model:
+            state = "ready"
+            replies = ["Change the title.\n[Response reached the local length limit. Ask me to continue.]",
+                       "Add a longer description.\n[Response reached the local length limit. Ask me to continue.]",
+                       "Pick a clear thumbnail."]
+
+            def reply(self, text, module, *, system_prompt):
+                prompts.append(text)
+                return self.replies.pop(0)
+
+        class Spotify:
+            connected = True
+            configured = True
+            resumed = 0
+            web_device_id = None
+            def resume(self):
+                Spotify.resumed += 1
+                return "Resumed."
+
+        with tempfile.TemporaryDirectory() as tmp:
+            core = Core(Store(Path(tmp) / "j.sqlite3"), Integrations(llm=Model(), spotify=Spotify()))
+            self.assertIn("Change the title", core.handle("give feedback on my rare pleco setup").text)
+            self.assertIn("longer description", core.handle("please continue with the feedback").text)
+            self.assertIn("Change the title.", prompts[1])        # the model is told what it already said
+            self.assertIn("do not start over", prompts[1])
+            self.assertIn("thumbnail", core.handle("continue").text)
+            self.assertEqual(Spotify.resumed, 0)                  # while an answer was pending, "continue" never touched the music
+
+
+class WhatsAppCallTests(unittest.TestCase):
+    def make(self):
+        import tempfile
+        from pathlib import Path
+        from jarvis.core import Core
+        from jarvis.integrations import Integrations
+        from jarvis.storage import Store
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.opened = []
+        return Core(Store(Path(self.tmp.name) / "j.sqlite3"), Integrations(open_app=self.opened.append, open_url=self.opened.append))
+
+    def test_number_normalisation(self):
+        from jarvis.contacts import normalize_phone
+        for raw in ("0722 123 456", "+40 722-123-456", "0040722123456"):
+            self.assertEqual(normalize_phone(raw), "40722123456")
+        with self.assertRaises(ValueError):
+            normalize_phone("123")
+
+    def test_call_asks_first_then_opens_the_chat_and_never_dials(self):
+        core = self.make()
+        self.assertIn("Saved Ana", core.handle("add contact Ana 0722 123 456").text)
+        self.assertIn("Ana", core.handle("contacts").text)
+        self.assertNotIn("722", core.handle("contacts").text)          # numbers are never read out
+        reply = core.handle("please call Ana on WhatsApp").text
+        self.assertIn("Call Ana on WhatsApp", reply)
+        self.assertEqual(self.opened, [])                                # nothing opens before the yes
+        self.assertIn("Press the call button", core.handle("yes").text)
+        self.assertEqual(self.opened, ["whatsapp://send?phone=40722123456"])
+        self.assertNotIn("Opening", core.handle("yes").text)             # a stray yes later does nothing more
+        self.assertEqual(len(self.opened), 1)
+
+    def test_no_cancels_and_unknown_or_chatty_calls_are_safe(self):
+        core = self.make()
+        core.handle("add contact Ana Maria 0722123456")
+        core.handle("add contact Ana Pop 0733123456")
+        self.assertIn("Several contacts match", core.handle("call Ana").text)
+        core.handle("call Ana Maria")
+        self.assertIn("Cancelled", core.handle("no").text)
+        self.assertEqual(self.opened, [])
+        self.assertIn("no contact called Bob", core.handle("call Bob").text)
+        self.assertNotIn("contact", core.handle("call it a day and go home now").text)

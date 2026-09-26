@@ -28,6 +28,20 @@ def _duration(iso):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10}
+NUMBERED = re.compile(r"(?:(?:the|my|video|clip|videoclip|number|no|nr|num|n|#)\s*)*(\d{1,2}|" + "|".join(NUMBER_WORDS) + r")(?:\s+(?:one|video|clip))?")
+
+
+def video_number(text):
+    """"video 3", "clip number three", "the second one" -> 3, 3, 2. None when the text is a title, not a number."""
+    match = NUMBERED.fullmatch(fold(text).strip(" .#"))
+    if not match:
+        return None
+    value = match.group(1)
+    return int(value) if value.isdigit() else NUMBER_WORDS[value]
+
+
 class YouTube(OAuthClient):
     name = "youtube"
     label = "YouTube"
@@ -77,6 +91,30 @@ class YouTube(OAuthClient):
         lines.append(self.analytics_summary())
         return "\n".join(x for x in lines if x)
 
+    def snapshot(self):
+        """Structured channel status for the HOLO card: totals, last 28 days, latest videos."""
+        ch = self.channel()
+        s, st = ch["snippet"], ch.get("statistics", {})
+        rows = self.recent(5, channel=ch)
+        return {"title": s.get("title", ""), "subscribers": _int(st.get("subscriberCount")), "views": _int(st.get("viewCount")),
+                "videos": _int(st.get("videoCount")), "subs_hidden": bool(st.get("hiddenSubscriberCount")),
+                "last28": self.analytics_numbers(),
+                "recent": [{"title": v["title"][:90], "published": v["published"], "views": v["views"], "likes": v["likes"],
+                            "comments": v["comments"]} for v in rows]}
+
+    def analytics_numbers(self):
+        try:
+            end = date.today()
+            status, data = self.api("GET", ANALYTICS, params={
+                "ids": "channel==MINE", "startDate": (end - timedelta(days=28)).isoformat(), "endDate": end.isoformat(),
+                "metrics": "views,estimatedMinutesWatched,averageViewDuration,subscribersGained,subscribersLost"})
+            if status != 200 or not data.get("rows"):
+                return None
+            views, minutes, avg, gained, lost = (round(x) for x in data["rows"][0])
+            return {"views": views, "hours": round(minutes / 60), "avg_seconds": avg, "gained": gained, "lost": lost}
+        except (NotConnected, ValueError, TypeError, KeyError):
+            return None
+
     def recent(self, count=10, channel=None):
         ch = channel or self.channel()
         uploads = ch["contentDetails"]["relatedPlaylists"]["uploads"]
@@ -119,6 +157,11 @@ class YouTube(OAuthClient):
         q = fold(query).strip()
         if q in ("", "latest", "last", "newest", "latest video", "my latest video", "last video", "most recent"):
             return rows[0]
+        number = video_number(q)
+        if number is not None:
+            if not 1 <= number <= len(rows):
+                raise NotConnected(f"I only see {len(rows)} videos. Say 'my videos' for the numbered list.")
+            return rows[number - 1]
         words = [w for w in re.findall(r"[a-z0-9]+", q) if w not in ("the", "my", "video", "about", "on", "of")]
         hits = [r for r in rows if all(w in fold(r["title"]) for w in words)] if words else []
         if not hits:

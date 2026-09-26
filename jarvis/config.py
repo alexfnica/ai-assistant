@@ -10,6 +10,7 @@ DEFAULTS = {
     "max_output_tokens": 700,
     "docs_dir": "",
     "aquarium_path": "",
+    "country_code": "40",
     "docs_exclude_sheets": ["DATE COMANDĂ"],
 }
 

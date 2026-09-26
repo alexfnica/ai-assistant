@@ -4,6 +4,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from .integrations import Integrations, NotConnected
+from .youtube import video_number
 from .modules import MODULES
 from .reminders import parse_due, display_due
 from .personality import load_prompt, address
@@ -97,6 +98,8 @@ class Core:
         self.store = store
         self.integrations = integrations or Integrations()
         self.system_prompt = load_prompt()
+        self._call = None     # a WhatsApp call waiting for your yes: {name, phone, until}
+        self._cut = None      # the last model answer that hit the length limit, so "continue" can finish it
 
     def handle(self, text, module="general"):
         if not isinstance(text, str) or not text.strip():
@@ -152,6 +155,13 @@ class Core:
             return build_briefing(self.store, getattr(self.integrations, "docs", None))
         if command in ("documente", "documents", "docs"):
             return self._docs().list_documents()
+        answer = self._call_command(command, module)
+        if answer is not None:
+            return answer
+        if self._cut:
+            done = self._continue_answer(command)
+            if done is not None:
+                return done
         if re.fullmatch(r"(?:please\s+)?(?:(?:show|give|tell)(?:\s+me)?\s+)?(?:the\s+|my\s+)?(?:aquarium|fishroom|fish room)(?:\s+game)?\s+(?:status|progress|report|update|version)|(?:how(?:'s| is)|what(?:'s| is)) (?:the |my )?(?:aquarium|fishroom|game)(?: game)?(?: doing| progress| status)?|aquarium (?:status|progress)", command, flags=re.I) or (module == "game" and re.fullmatch(r"(?:progress|report|version|what'?s new|latest version)[.!?]*", command, flags=re.I)):
             from . import aquarium
             return aquarium.summary_text(aquarium.collect(getattr(self.integrations, "aquarium_path", ""), self.store))
@@ -212,7 +222,7 @@ class Core:
         if intent:
             return intent
         if self.integrations.llm:
-            return self.integrations.llm.reply(text, module, system_prompt=self.system_prompt)
+            return self._ask_llm(text, module)
         return "No action was taken. My local command functions are ready, but a conversational model is not yet connected. Please enter 'help', or give me an explicit task or note to save."
 
     GENERIC = {"excel", "document", "documents", "docs", "doc", "file", "files", "spreadsheet", "spreadsheets", "xlsx", "the", "my", "a", "an",
@@ -236,6 +246,87 @@ class Core:
                 if "Several" in str(error):
                     raise
         return "Your documents, sir. Say \"open\" and a name, for example: open the stocklist.\n" + docs.list_documents()
+
+    LENGTH_CUT = re.compile(r"\n?\[(?:Response|Reply) reached the (?:local )?length limit\. Ask me to continue\.\]\s*$")
+    CONTINUE = re.compile(r"(?:please\s+)?(?:continue|go on|keep going|carry on|proceed|finish|go ahead|continua|mai departe)"
+                          r"(?:[\s,]+(?:please|with|the|your|my|it|that|this|answer|reply|response|feedback|review|analysis|explanation|from where you (?:stopped|left off)|from there))*[.!?]*")
+
+    def _ask_llm(self, prompt, module, earlier=""):
+        """Ask the model. If the answer was cut by the length limit, remember it so a plain "continue" finishes it."""
+        answer = self.integrations.llm.reply(prompt, module, system_prompt=self.system_prompt)
+        match = self.LENGTH_CUT.search(answer)
+        if match:
+            self._cut = {"module": module, "prompt": self._cut["prompt"] if earlier and self._cut else prompt[:1500],
+                         "answer": (earlier + " " + answer[:match.start()]).strip()}
+        else:
+            self._cut = None
+        return answer
+
+    def _continue_answer(self, command):
+        cut = self._cut
+        if not cut or not self.CONTINUE.fullmatch(command):
+            return None
+        prompt = (f"{cut['prompt']}\n\nYour previous answer was cut off by a length limit. What you had written so far:\n\"\"\"\n"
+                  f"{cut['answer'][-900:]}\n\"\"\"\nContinue from exactly where it stopped. Do not repeat anything already said, and do not start over.")
+        return self._ask_llm(prompt, cut["module"], earlier=cut["answer"])
+
+    def _contacts(self):
+        from .config import load_config
+        from .contacts import Contacts
+        return Contacts(self.store.path.parent, str(load_config(self.store.path.parent).get("country_code", "40")))
+
+    def _call_command(self, command, module):
+        """"call Ana": ask for a yes, then open her WhatsApp chat. Never dials; you press the call button."""
+        import time
+        pending = self._call
+        if pending and time.time() > pending["until"]:
+            pending = self._call = None
+        if pending:
+            if re.fullmatch(r"(?:yes|yeah|yep|yup|sure|confirm|confirmed|do it|go ahead|da|ok|okay)(?:[\s,]+(?:please|call|do it|open|her|him|them))*[.!?]*", command):
+                self._call = None
+                return self._open_chat(pending["name"], pending["phone"])
+            if re.fullmatch(r"(?:no|nope|cancel|never mind|nevermind|stop|nu|don'?t)(?:[\s,]+(?:please|thanks|call|it))*[.!?]*", command):
+                self._call = None
+                return "Cancelled, sir. I have not opened anything."
+        add = re.fullmatch(r"(?:(?:add|save|new)\s+contact|contact)[:\s]\s*(.+?)\s+((?:\+|00)?\d[\d\s\-().]{6,})", command)
+        if add:
+            name = self._contacts().add(add.group(1).strip(" ,:").title(), add.group(2))
+            return f"Saved {name} in your private contacts. The number stays on this PC only."
+        if re.fullmatch(r"(?:(?:my|list(?: my)?|show(?: me)?(?: my)?)\s+)?contacts(?:\s+list)?", command):
+            names = self._contacts().names()
+            return "Your contacts: " + ", ".join(names) + "." if names else "No contacts yet. Say: add contact, a name and a number. Numbers stay in data/contacts.json."
+        call = re.fullmatch(r"(?:please\s+)?(?:(?:make\s+a\s+|give\s+)?(?:whats\s*app\s+|whatsup\s+|phone\s+|video\s+)?call|ring|dial|sun[aă](?:-?[oaăl])?|apeleaz[aă](?:-?[oaăl])?)\s+(?:up\s+|to\s+|pe\s+)?(.+?)"
+                            r"(?:\s+(?:on|via|using|with|pe|prin)\s+(?:whats\s*app|whats\s*up|what'?s\s*app|what'?s\s*up|whatsup|whatsap))?[.!?]*", command)
+        if not call:
+            return None
+        query = call.group(1).strip()
+        if len(query.split()) > 3:
+            return None                          # "call it a day", "call me when ..." is conversation, not a contact
+        try:
+            match = self._contacts().find(query)
+        except ValueError as error:
+            return str(error)
+        if not match:
+            return f"I have no contact called {query.title()}. Say: add contact {query.title()} and the number."
+        import time
+        self._call = {"name": match[0], "phone": match[1], "until": time.time() + 60}
+        return f"Call {match[0]} on WhatsApp, sir? Say yes and I will open the chat. You press call."
+
+    def _open_chat(self, name, phone):
+        launcher = getattr(self.integrations, "open_app", None)
+        opener = getattr(self.integrations, "open_url", None)
+        try:
+            if launcher:
+                launcher(f"whatsapp://send?phone={phone}")
+            elif opener:
+                opener(f"https://wa.me/{phone}")
+            else:
+                raise NotConnected("Opening WhatsApp is not available on this system.")
+        except OSError:
+            if not opener:
+                raise NotConnected("I could not open WhatsApp. Is the desktop app installed?") from None
+            opener(f"https://wa.me/{phone}")
+        return f"Opening {name}'s WhatsApp chat. Press the call button, sir."
 
     def _service(self, name):
         service = getattr(self.integrations, name, None)
@@ -365,9 +456,12 @@ class Core:
     def _youtube_command(self, command, module):
         overview = re.fullmatch(r"(?:youtube|my youtube|my channel|channel|channel stats|youtube stats|youtube overview|how is my channel(?: doing)?|how is my youtube(?: doing)?)", command)
         videos = re.fullmatch(r"(?:my videos|latest videos|recent videos|list (?:my )?videos|my youtube videos)", command)
-        report = re.fullmatch(r"(?:video report|report on|report)[: ]\s*(.+)", command)
+        report = re.fullmatch(r"(?:video report|report on|report)[: ]\s*(.+)", command) or re.fullmatch(r"(?:(?:video|clip)\s+(?:number\s+|no\.?\s+|#)?)(\d{1,2}|\w+)", command)
+        if report and report.re.pattern.startswith("(?:(?:video|clip)") and video_number(report.group(1)) is None:
+            report = None
         feedback = re.fullmatch(r"(?:give me |get me )?(?:some )?(?:feedback|review|critique|analy[sz]e)(?: on| of| for| about)?\s*(.*)", command)
-        if feedback and not re.search(r"\b(video|youtube|latest|newest|last)\b", feedback.group(1) or "") and "video" not in command:
+        bare_feedback = bool(feedback) and not (feedback.group(1) or "").strip() and "video" not in command
+        if feedback and not bare_feedback and not re.search(r"\b(video|videos|clip|clips|youtube|latest|newest|last|number|first|second|third)\b|#|\d", feedback.group(1) or "") and "video" not in command:
             feedback = None
         if not (overview or videos or report or feedback):
             return None
@@ -378,12 +472,13 @@ class Core:
             raise NotConnected("YouTube is not connected yet. Say: connect youtube.")
         if overview:
             return youtube.overview()
-        if videos:
+        if videos or bare_feedback:
             rows = youtube.recent(10)
-            return "\n".join(f"- {v['title']} ({v['published']}): {v['views']:,} views" for v in rows) or "No videos found."
+            listing = "\n".join(f"{i}. {v['title']} ({v['published']}): {v['views']:,} views" for i, v in enumerate(rows, 1)) or "No videos found."
+            return listing + ("\n\nWhich one, sir? Say: feedback on video 1 (1 is the newest)." if bare_feedback and rows else "")
         if report:
             return youtube.video_report(report.group(1))
-        query = re.sub(r"\b(?:my|the|video|youtube|about|please)\b", " ", feedback.group(1) or "").strip()
+        query = re.sub(r"\b(?:my|the|videos?|clips?|youtube|about|please)\b", " ", feedback.group(1) or "").strip()
         query = " ".join(query.split()) or "latest"
         if query in ("latest", "newest", "last", "most recent", "latest newest"):
             query = "latest"
@@ -395,7 +490,7 @@ class Core:
                   "Answer in under 200 words: what the numbers say against the channel average, three concrete improvements "
                   "(title, thumbnail, first seconds, description, tags), what viewers are asking for, and one idea for the next video. "
                   "Do not invent numbers.\n<data>\n" + data[:3000] + "\n</data>")
-        return self.integrations.llm.reply(prompt, module, system_prompt=self.system_prompt)
+        return self._ask_llm(prompt, module)
 
     def _docs(self):
         docs = getattr(self.integrations, "docs", None)
