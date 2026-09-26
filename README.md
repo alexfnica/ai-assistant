@@ -1,6 +1,6 @@
-# A.I Assistant
+﻿# A.I Assistant
 
-[![tests](https://github.com/YOUR-USERNAME/ai-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR-USERNAME/ai-assistant/actions)
+[![tests](https://github.com/NUME/ai-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/NUME/ai-assistant/actions)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -78,7 +78,7 @@ Requirements: Python 3.11+, Chrome or Edge. Windows is the primary target
 tests run on any OS.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/ai-assistant.git
+git clone https://github.com/NUME/ai-assistant.git
 cd ai-assistant
 python -m unittest discover -s tests        # 66 tests, no dependencies
 python run_jarvis.py --holo                 # http://127.0.0.1:4891
@@ -125,3 +125,5 @@ personality/   system prompt for the assistant persona
 
 MIT, see [LICENSE](LICENSE). Bundled third-party files in `holo/vendor/`
 (Three.js, MediaPipe) keep their own licences. Model licences are under `llm/`.
+
+
