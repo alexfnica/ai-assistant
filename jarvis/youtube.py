@@ -66,7 +66,14 @@ class YouTube(OAuthClient):
                 raise NotConnected("The YouTube daily quota is used up. Try again tomorrow.")
             if reason == "commentsDisabled":
                 return {"items": [], "commentsDisabled": True}
-            raise NotConnected("YouTube refused access. Check that the YouTube Data API is enabled and you are a test user.")
+            err = (data.get("error") or {}) if isinstance(data, dict) else {}
+            detail = f" Google says: {reason or 'unknown'}" + (f" - {str(err.get('message', ''))[:160]}" if err.get("message") else "") + "."
+            hint = ""
+            if reason in ("insufficientPermissions", "forbidden") or "scope" in str(err.get("message", "")).lower():
+                hint = " Say: connect youtube again and tick every permission box."
+            elif reason in ("accessNotConfigured", "SERVICE_DISABLED"):
+                hint = " Enable YouTube Data API v3 in the same Google Cloud project as your client id."
+            raise NotConnected("YouTube refused access." + detail + hint)
         if status != 200:
             raise NotConnected(f"YouTube returned an error ({status}).")
         return data

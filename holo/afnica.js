@@ -249,7 +249,7 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
     const key = t.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim(), nowT = Date.now();   // the same phrase twice within a few seconds is one command
     if (key && key === handle.k && nowT - handle.t < 6000) return; handle.k = key; handle.t = nowT;
     const wake = /^(?:hey |ok |okay )?jarvis\b[\s,.:!?-]*/i;
-    const musicOk = /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|yes|yeah|yep|sure|confirm|cancel|nope|no|volume|turn (?:it |the volume )?(?:up|down)|louder|quieter)\b/i;
+    const musicOk = /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|volume|turn (?:it |the volume )?(?:up|down)|louder|quieter)\b/i;
     if (window.__musicPlaying && !needWake) {   // the mic also hears the song: take only what follows the last "Jarvis", or a music command at the very end
       const all = [...t.matchAll(/\b(?:hey |ok |okay )?jarvis\b[\s,.:!?-]*/gi)];
       const tail = t.match(/(?:^|[\s,.!?])((?:please\s+)?(?:stop(?: the)?(?: music| song)?|pause|resume|next(?: song)?|skip|louder|quieter|volume (?:up|down)|turn (?:it |the volume )?(?:up|down))[\s.!?]*)$/i);
@@ -268,7 +268,7 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
     if (all.length) { const m = all[all.length - 1], rest = x.slice(m.index + m[0].length).trim(); return rest ? 'jarvis ' + rest : null; }
     const tail = x.match(/(?:^|[\s,.!?])((?:please\s+)?(?:stop(?: the)?(?: music| song)?|pause|resume|next(?: song)?|skip|louder|quieter|volume (?:up|down)|turn (?:it |the volume )?(?:up|down))[\s.!?]*)$/i);
     if (tail) return tail[1].trim();
-    const w = words(x); return w.length <= 10 && /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|volume|louder|quieter|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste|yes|yeah|yep|sure|confirm|cancel|nope|no)\b/i.test(x) ? x : null;
+    const w = words(x); return w.length <= 10 && /^(?:please\s+)?(?:play|stop|pause|resume|next|skip|previous|volume|louder|quieter|open|launch|start|go to|show|check|read|search|tell|what|what's|how|list|briefing|connect|remind|add|send|deschide|porneste)\b/i.test(x) ? x : null;
   };
   function startRec() {
     if (!SR || muted || rec) return;
@@ -352,7 +352,8 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
   let gen = 0, audio = null, voices = [];
   if (synth) { const load = () => { voices = synth.getVoices(); }; load(); synth.onvoiceschanged = load; }
   const B = document.body;
-  const clean = t => String(t).replace(/\([^)]*\)/g, ' ').replace(/\b[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+\b/g, ' ').replace(/\bon [A-Z]{5,}\b/g, '').replace(/AC\/DC/g, 'A C D C').replace(/^Sir,\s*/i, '').replace(/J\.?A\.?R\.?V\.?I\.?S\.?/g, 'Jarvis').replace(/\bAFNICA\b/g, 'Afnica')
+  const spokenList = t => { const s = String(t), n = (s.match(/^\d{1,2}\. /gm) || []).length; return n >= 3 ? 'Here are ' + n + ' items, numbered on screen. ' + s.replace(/^\d{1,2}\. .*$/gm, ' ') : s; };
+  const clean = t => spokenList(t).replace(/\([^)]*\)/g, ' ').replace(/\b[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+\b/g, ' ').replace(/\bon [A-Z]{5,}\b/g, '').replace(/AC\/DC/g, 'A C D C').replace(/^Sir,\s*/i, '').replace(/J\.?A\.?R\.?V\.?I\.?S\.?/g, 'Jarvis').replace(/\bAFNICA\b/g, 'Afnica')
     .replace(/\.(xlsx|xls|csv|md|txt)\b/gi, '').replace(/#(\d+)/g, 'number $1').replace(/(\d)\s*%/g, '$1 percent').replace(/[\u2013\u2014]/g, ', ')
     .replace(/https?:\/\/\S+/g, '').replace(/[#*_`>|•·]/g, ' ').replace(/\s+-\s+/g, ', ').replace(/\s+/g, ' ').trim().slice(0, 1200);
   const chunks = t => { const out = []; for (const p of (t.match(/[^.!?\n]+[.!?]*/g) || [t])) { const q = p.trim(); if (!q) continue;
@@ -568,5 +569,5 @@ addEventListener('keydown', e => { if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/
       const a = Math.max(0, Math.round(Date.now() / 1000 - d.updated)); put('yt-age', 'Updated ' + (a < 90 ? 'just now' : Math.round(a / 60) + ' min ago') + ' · refreshes every 5 min');
     } catch (_) { put('yt-empty', 'Could not read YouTube status.'); $('yt-empty').hidden = false; }
   }
-  sel.addEventListener('change', refresh); refresh(); setInterval(refresh, 15000);   // cheap: the server answers from its five-minute cache
+  sel.addEventListener('change', refresh); refresh(); setInterval(refresh, 60000);
 })();
