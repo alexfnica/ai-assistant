@@ -1,0 +1,11 @@
+[project]
+name = "ai-assistant"
+version = "1.4.0"
+description = "Local-first voice assistant: deterministic command router, on-device neural TTS, Spotify and YouTube integrations, holographic browser UI"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.unittest]
+start-directory = "tests"

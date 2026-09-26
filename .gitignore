@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# private / machine-specific data: never commit
+data/*
+!data/README.md
+!data/*.example.json
+backup-before-cloud/
+office-junction-log.txt
+Fix-Office-Junction.cmd
+
+# large or downloaded runtimes (see README, "Setup")
+voice-models/
+voice-runtime/
+voice-natural-runtime/
+llm/runtime/
+llm/*.gguf
+holo/props/
+
+# removed integration leftovers
+Setup-ElevenLabs.cmd
+jarvis/elevenlabs.py
+tests/test_elevenlabs.py

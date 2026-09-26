@@ -1,0 +1,5 @@
+{
+  "release": "b10786",
+  "source": "https://github.com/ggml-org/llama.cpp/releases/download/b10786/llama-b10786-bin-win-cpu-x64.zip",
+  "digest": "sha256:4bd5eef83548aa73f712c74406640df294bcb98d916c4eef21f7bd41c2232a6e"
+}
