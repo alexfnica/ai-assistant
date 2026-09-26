@@ -123,6 +123,16 @@ class SpotifyTests(Base):
             self.assertIn("Opening Spotify", core.handle(phrase).text)
         self.assertEqual(launched, ["spotify:"] * 3)
 
+    def test_open_aquarium_game_uses_configured_path(self):
+        spotify, opener, core = self.make({})
+        with self.assertRaises(Exception):          # not configured: no fake success
+            core._open_site_command("open aquarium", "general")
+        opened = []
+        core.integrations.open_app = opened.append
+        core.integrations.aquarium_path = "C:/games/aquarium.html"
+        self.assertIn("Opening the aquarium", core.handle("open the aquarium").text)
+        self.assertEqual(opened, ["C:/games/aquarium.html"])
+
     def test_open_known_sites_and_apps_by_voice(self):
         urls, apps = [], []
         spotify, opener, core = self.make({})

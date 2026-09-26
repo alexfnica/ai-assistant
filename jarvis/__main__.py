@@ -53,10 +53,11 @@ def main():
     store = Store(args.data_dir / "jarvis.sqlite3")
     from .integrations import Integrations
     from .local_model import LocalModel
+    from .config import load_config
     library = build_library(args)
     spotify, youtube, open_url = build_music(args)
     model = None if args.no_llm else build_model(store, args, library, youtube)
-    core = Core(store, Integrations(llm=model, docs=library, spotify=spotify, youtube=youtube, open_url=open_url, open_app=getattr(__import__('os'), 'startfile', None)))
+    core = Core(store, Integrations(llm=model, docs=library, spotify=spotify, youtube=youtube, open_url=open_url, open_app=getattr(__import__('os'), 'startfile', None), aquarium_path=load_config(args.data_dir).get('aquarium_path', '')))
     if args.holo:
         from .holo_server import run
         run(store, args.port, not args.no_browser, not args.no_voice, core=core)

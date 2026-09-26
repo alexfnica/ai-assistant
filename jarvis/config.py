@@ -9,6 +9,7 @@ DEFAULTS = {
     "monthly_token_budget": 3_000_000,
     "max_output_tokens": 700,
     "docs_dir": "",
+    "aquarium_path": "",
     "docs_exclude_sheets": ["DATE COMANDĂ"],
 }
 

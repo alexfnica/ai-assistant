@@ -62,6 +62,7 @@ class Integrations:
     spotify: object | None = None  # playback control, explicit commands only
     youtube: object | None = None  # read-only channel data
     open_url: object | None = None  # opens a login page in the default browser (one-time OAuth consent)
+    aquarium_path: str = ""  # local aquarium game file (private, set in data/jarvis_config.json); never stored in the repo
     open_app: object | None = None  # opens an installed desktop app by URI, e.g. os.startfile('whatsapp:') on Windows
 
     def __post_init__(self):

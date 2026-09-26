@@ -269,6 +269,18 @@ class Core:
         if not match:
             return None
         name = re.sub(r"\s+", " ", match.group(1).lower()).strip()
+        if name in ("aquarium", "the aquarium", "fishroom", "fish room", "aquarium game", "aquarium simulator", "simulator", "acvariu", "afnica aquarium"):
+            path = getattr(self.integrations, "aquarium_path", "")
+            if not path:
+                raise NotConnected("The aquarium game is not linked. Set aquarium_path in data/jarvis_config.json.")
+            launcher = getattr(self.integrations, "open_app", None)
+            if launcher is None:
+                raise NotConnected("Opening local files is not available on this system.")
+            try:
+                launcher(path)
+            except OSError:
+                raise NotConnected("I could not open the aquarium game. Check aquarium_path.") from None
+            return "Opening the aquarium."
         entry = self.SITES.get(name)
         if not entry:
             return None
