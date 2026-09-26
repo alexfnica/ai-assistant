@@ -310,7 +310,7 @@ class Core:
             return f"I have no contact called {query.title()}. Say: add contact {query.title()} and the number."
         import time
         self._call = {"name": match[0], "phone": match[1], "until": time.time() + 60}
-        return f"Call {match[0]} on WhatsApp, sir? Say yes and I will open the chat. You press call."
+        return f"Call {match[0]} on WhatsApp, sir, number ending {match[1][-3:]}? Say yes and I will open that chat. You press call."
 
     def _open_chat(self, name, phone):
         launcher = getattr(self.integrations, "open_app", None)
@@ -326,7 +326,7 @@ class Core:
             if not opener:
                 raise NotConnected("I could not open WhatsApp. Is the desktop app installed?") from None
             opener(f"https://wa.me/{phone}")
-        return f"Opening {name}'s WhatsApp chat. Press the call button, sir."
+        return f"Opening {name}'s WhatsApp chat, number ending {phone[-3:]}. Press the call button, sir."
 
     def _service(self, name):
         service = getattr(self.integrations, name, None)
