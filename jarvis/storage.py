@@ -67,6 +67,9 @@ class Store:
             return db.execute("DELETE FROM memories WHERE id=?", (record_id,)).rowcount > 0
 
     def add_task(self, module, title, due_at=None):
+        # collapse any embedded newlines/tabs to plain spaces - a title spanning
+        # multiple lines silently breaks the HOLO UI's one-task-per-line table render.
+        title = " ".join(str(title).split())
         with self.connection() as db:
             return db.execute(
                 "INSERT INTO tasks(module,title,due_at,created_at) VALUES(?,?,?,?)",
@@ -89,6 +92,10 @@ class Store:
     def complete(self, task_id):
         with self.connection() as db:
             return db.execute("UPDATE tasks SET status='done' WHERE id=? AND status='open'", (task_id,)).rowcount > 0
+
+    def schedule(self, task_id, due_at):
+        with self.connection() as db:
+            return db.execute("UPDATE tasks SET due_at=? WHERE id=? AND status='open'", (due_at, task_id)).rowcount > 0
 
     def due(self, now=None):
         with self.connection() as db:

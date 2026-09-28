@@ -89,6 +89,7 @@ class Desktop:
         self.select_module("general")
         self.show("chat")
         self.poll()
+        self.send("briefing")   # today's picks and open tasks, visible the moment the window opens
 
     def label(self, parent, text, size=11, color=INK):
         return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=color,

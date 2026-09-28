@@ -30,10 +30,10 @@ def _greeting(now):
     return f"{word}, Alex. It is {now.strftime('%A')}, {now.day} {now.strftime('%B %Y')}, {now.strftime('%H:%M')}."
 
 
-def _tasks_section(store, now):
-    tasks = store.tasks(None)
+def _tasks_section(store, now, exclude_ids=()):
+    tasks = [t for t in store.tasks(None) if t["id"] not in exclude_ids]
     if not tasks:
-        return "Tasks: none open."
+        return "Tasks: none open." if not exclude_ids else None
     overdue, today, later, undated = [], [], 0, 0
     for task in tasks:
         due = task["due_at"]
@@ -90,11 +90,37 @@ def _water_section(library):
             f"Next is {day.replace('Ziua', 'day')}: tanks {_ranges(tanks)}, {len(tanks)} to go.")
 
 
+def _todays_picks(store, now):
+    from .planner import Planner
+    return Planner(store.path.parent).todays_picks(store, now)
+
+
+def _format_picks(picks):
+    from .modules import MODULES as APP_MODULES
+    lines = []
+    for module, tasks in picks.items():
+        open_titles = [t["title"] for t in tasks if t["status"] == "open"]
+        if open_titles:
+            lines.append(f"{APP_MODULES[module].label}: " + "; ".join(open_titles))
+    return "Today's picks:\n" + "\n".join(lines) if lines else None
+
+
 def build_briefing(store, library=None, now=None):
     now = now or datetime.now().astimezone()
     sections = [_greeting(now)]
+    picked_ids = set()
     try:
-        sections.append(_tasks_section(store, now))
+        picks = _todays_picks(store, now)
+        picked_ids = {t["id"] for tasks in picks.values() for t in tasks}
+        text = _format_picks(picks)
+        if text:
+            sections.append(text)
+    except Exception:
+        sections.append("Today's picks: could not be read.")
+    try:
+        rest = _tasks_section(store, now, picked_ids)
+        if rest:
+            sections.append(rest)
     except Exception:
         sections.append("Tasks: could not be read.")
     if library is not None and library.available:
