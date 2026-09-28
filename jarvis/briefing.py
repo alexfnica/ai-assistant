@@ -100,8 +100,10 @@ def _format_picks(picks):
     lines = []
     for module, tasks in picks.items():
         open_titles = [t["title"] for t in tasks if t["status"] == "open"]
-        if open_titles:
-            lines.append(f"{APP_MODULES[module].label}: " + "; ".join(open_titles))
+        if not open_titles:
+            continue
+        lines.append(f"{APP_MODULES[module].label}:")
+        lines.extend(f"  \u2022 {title}" for title in open_titles)
     return "Today's picks:\n" + "\n".join(lines) if lines else None
 
 
