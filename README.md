@@ -68,7 +68,7 @@ and [docs/VALIDATION.md](docs/VALIDATION.md) (currently in Romanian, in `docs/ro
 - YouTube channel helpers and feedback.
 - Excel document reading with per-sheet filtering.
 - Notes, tasks, reminders in SQLite; morning briefing.
-- Pluggable modules (`jarvis/modules/`): fishroom journal, jobs, game, YouTube, general.
+- Pluggable modules (`jarvis/modules/`): Aplicație Simulator (game), Shopify (shop), A.I Assistant (assistant), fishroom journal, jobs, YouTube, general.
 - Hand-tracking holographic UI (Three.js, MediaPipe hands) with an Iron-Man HUD skin.
 
 ## Setup

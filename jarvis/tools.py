@@ -9,7 +9,7 @@ from datetime import datetime
 from .documents import DocumentLibrary
 from .reminders import parse_due, display_due
 
-MODULE_IDS = ("general", "fishroom", "youtube", "jobs", "game")
+MODULE_IDS = ("general", "fishroom", "youtube", "jobs", "game", "shop", "assistant")
 PENDING_SECONDS = 600
 MAX_TOOL_TEXT = 6000
 

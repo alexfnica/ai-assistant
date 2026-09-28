@@ -30,6 +30,12 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(len(self.store.memories(module)), 1)
             self.assertEqual(len(self.store.tasks(module)), 1)
 
+    def test_shop_and_assistant_modules_registered(self):
+        self.assertIn("shop", MODULES)
+        self.assertIn("assistant", MODULES)
+        self.assertEqual(MODULES["shop"].label, "Shopify")
+        self.assertEqual(MODULES["assistant"].label, "A.I Assistant")
+
     def test_unknown_module_does_not_write(self):
         self.assertIn("Unknown module", self.core.handle("/other task: x").text)
         self.assertFalse(self.store.tasks())

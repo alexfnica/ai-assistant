@@ -66,7 +66,7 @@ HELP = """Available local commands; your text after ':' is preserved exactly:
 • gmail / calendar — integrations not connected
 • status / help / personality
 You may write commands in Romanian; I shall reply in English.
-Optional module prefix: /fishroom, /youtube, /jobs, /game or /general.
+Optional module prefix: /fishroom, /youtube, /jobs, /game, /shop, /assistant or /general.
 Use the Reminder form for dates; free-form dates are not interpreted.
 Reminders require the application to be running. Overdue tasks reappear on restart.
 Which task shall we address, sir?"""
@@ -114,7 +114,7 @@ class Core:
             prefix, _, text = text.partition(" ")
             routed = prefix[1:].lower()
             if routed not in MODULES:
-                return Reply(address("Unknown module. Please use /general, /fishroom, /youtube, /jobs or /game."), module)
+                return Reply(address("Unknown module. Please use /general, /fishroom, /youtube, /jobs, /game, /shop or /assistant."), module)
             module = routed
             text = text.strip() or "status"
         self.store.message("user", original, module)
@@ -186,6 +186,14 @@ class Core:
         if command == "calendar":
             start = datetime.now(timezone.utc)
             return self._results(self.integrations.calendar.list_events(start.isoformat(), (start + timedelta(days=7)).isoformat()))
+        # "done 12" / "gata 12" - no colon: the form spoken aloud and used by the task-list checkboxes
+        bare_done = re.fullmatch(r"(gata|uita|done|forget)\s*#?([1-9][0-9]*)", command)
+        if bare_done:
+            word, task_id = bare_done.group(1), int(bare_done.group(2))
+            changed = self.store.complete(task_id) if word in ("gata", "done") else self.store.forget(task_id)
+            if not changed:
+                return "ID not found, or the operation has already been completed."
+            return "Task completed." if word in ("gata", "done") else "Note deleted. Its text remains in conversation history."
         if separator:
             if not payload:
                 raise ValueError("Please include text after ':'. Enter 'help' for examples.")
@@ -297,11 +305,17 @@ class Core:
         return f"Routine #{row['id']} saved: {row['title']}, {describe(row)}. I shall remind you aloud while I am running."
 
     def routines_tick(self, now=None):
-        """Turn routines that just came due into ordinary tasks and spoken alerts. Called from the status poll."""
+        """Turn routines that just came due into ordinary tasks and spoken alerts. Called from the status poll.
+
+        A routine you didn't finish yesterday is never dropped: if its task from a previous day is still open,
+        today's alert just points at that same task again instead of creating a second one - one checkbox per
+        routine, carried forward until you actually tick it off."""
         from .storage import utc_now
         alerts = []
         for row in self._routines().due(now):
-            task_id = self.store.add_task("fishroom", "Routine: " + row["title"], utc_now())
+            title = "Routine: " + row["title"]
+            existing = next((t for t in self.store.tasks("fishroom") if t["title"] == title), None)
+            task_id = existing["id"] if existing else self.store.add_task("fishroom", title, utc_now())
             message = address(f"Routine, sir: {row['title']}. Say: done {task_id} when it is finished.")
             self.store.message("assistant", message, "fishroom")
             alerts.append(f"Routine, sir: {row['title']}. Say done {task_id} when it is finished.")

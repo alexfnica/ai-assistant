@@ -41,7 +41,7 @@ class HoloTests(unittest.TestCase):
     def test_full_task_flow_and_persistence(self):
         self.assertEqual(self.command('task: Verifică filtrul')[0], 200)
         tree = json.loads(self.request('/api/tree')[1])
-        self.assertEqual(len(tree), 5)
+        self.assertEqual(len(tree), 7)
         folder = next(x for x in tree if x['module'] == 'fishroom')
         self.assertEqual(folder['files'][0]['title'], 'Verifică filtrul')
         self.assertEqual(len(Store(self.store.path).tasks()), 1)

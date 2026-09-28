@@ -20,7 +20,7 @@ class DesktopSmoke(unittest.TestCase):
                 app = Desktop(root, Core(Store(Path(folder) / "test.sqlite3")), VoiceController(FakeBackend()))
                 app.voice.enabled.set(False)
                 root.update_idletasks()
-                for module in ("general", "fishroom", "youtube", "jobs", "game"):
+                for module in ("general", "fishroom", "youtube", "jobs", "game", "shop", "assistant"):
                     app.select_module(module)
                     for view in app.views:
                         app.show(view)
